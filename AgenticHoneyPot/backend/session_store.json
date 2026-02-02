@@ -1,0 +1,20 @@
+{
+    "win-session-999": {
+        "upi_ids": [
+            "scammer@upi"
+        ],
+        "phishing_links": [
+            "http://fake-login.com"
+        ],
+        "phone_numbers": [],
+        "keywords": [
+            "verify",
+            "bank",
+            "account",
+            "transfer"
+        ],
+        "msg_count": 2,
+        "start_time": "2026-01-31T17:01:16.668510",
+        "threat_level": "HIGH"
+    }
+}
