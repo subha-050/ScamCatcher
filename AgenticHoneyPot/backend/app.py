@@ -10,7 +10,8 @@ app = Flask(__name__)
 CORS(app)
 
 # --- CONFIGURATION ---
-API_KEY = os.getenv("HONEYPOT_API_KEY", "your_secret_api_key_here")
+# Defaulting to your test key if the environment variable isn't found
+API_KEY = os.getenv("HONEYPOT_API_KEY", "sk_test_5f2a9b1c8e3d4f5a6b7c")
 DATA_FILE = "session_store.json"
 
 
@@ -36,9 +37,11 @@ def save_data(data):
 # --- ADVANCED ANALYTICS & EXTRACTION ---
 def extract_intel(text):
     """
-    Advanced extraction targeting Indian scam patterns.
     Detects UPI, Indian Mobile Numbers, URLs, and calculates a Threat Score.
     """
+    if not text:
+        return {"upi_ids":[], "phishing_links":[], "phone_numbers":[]}, [], "LOW"
+
     patterns = {
         "upi_ids": re.findall(r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}', text),
         "phishing_links": re.findall(r'https?://[^\s]+', text),
@@ -59,7 +62,6 @@ def extract_intel(text):
 
 @app.route('/')
 def home():
-    print("Main landing page accessed successfully!")
     return jsonify({
         "status": "online",
         "message": "ScamCatcher Honeypot API is live and running.",
@@ -72,15 +74,23 @@ def home():
 
 @app.route('/api/honeypot', methods=['POST'])
 def handle_message():
-    if request.headers.get("x-api-key") != API_KEY:
+    # Verify API Key
+    incoming_key = request.headers.get("x-api-key")
+    if incoming_key != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    data = request.get_json()
-    if not data:
-        return jsonify({"status": "error", "message": "Missing JSON"}), 400
-
-    session_id = data.get("sessionId")
-    msg_text = data.get("message", {}).get("text", "")
+    # Flexible JSON parsing to prevent "INVALID_REQUEST_BODY"
+    data = request.get_json(force=True, silent=True) or {}
+    
+    # Extract session and message with fallbacks
+    session_id = data.get("sessionId", "test-session-101")
+    message_obj = data.get("message", {})
+    
+    # Handle both {"message": {"text": "..."}} and {"message": "..."}
+    if isinstance(message_obj, dict):
+        msg_text = message_obj.get("text", "")
+    else:
+        msg_text = str(message_obj)
 
     store = load_data()
 
@@ -101,7 +111,7 @@ def handle_message():
 
     save_data(store)
 
-    # Agentic Response Logic based on threat level
+    # Response Logic
     if level == "HIGH":
         reply = "I'm very scared about my account being blocked. I tried the link but it's slow. Can I pay via UPI directly?"
     else:
@@ -115,14 +125,12 @@ def final_report():
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    req_data = request.get_json()
-    if not req_data:
-        return jsonify({"status": "error", "message": "Missing sessionId"}), 400
-
+    req_data = request.get_json(force=True, silent=True) or {}
     session_id = req_data.get("sessionId")
+    
     store = load_data()
 
-    if session_id not in store:
+    if not session_id or session_id not in store:
         return jsonify({"status": "error", "message": "Invalid Session"}), 404
 
     s_data = store[session_id]
@@ -139,17 +147,14 @@ def final_report():
             "phoneNumbers": s_data["phone_numbers"],
             "suspiciousKeywords": s_data["keywords"]
         },
-        "agentNotes": f"Threat Level: {s_data['threat_level']}. Agent maintained persona for {s_data['msg_count']} turns."
+        "agentNotes": f"Threat Level: {s_data['threat_level']}. Turns: {s_data['msg_count']}."
     }
 
     try:
-        print(f"--- Attempting GUVI Callback for Session: {session_id} ---")
-        res = requests.post("https://hackathon.guvi.in/api/updateHoneyPotFinalResult", json=payload, timeout=10)
+        res = requests.post("https://hackathon.guvi.in/api/updateHoneyPotFinalResult", json=payload, timeout=5)
         callback_status = res.status_code
-        print(f"GUVI Response Status: {callback_status}")
-    except Exception as e:
-        print(f"Callback Error: {e}")
-        callback_status = "Connection Failed"
+    except Exception:
+        callback_status = "Failed"
 
     return jsonify({
         "status": "success",
@@ -159,5 +164,6 @@ def final_report():
 
 
 if __name__ == '__main__':
+    # Render uses the PORT environment variable
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port)
