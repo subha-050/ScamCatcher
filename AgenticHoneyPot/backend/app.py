@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -11,25 +11,29 @@ API_KEY = "sk_test_5f2a9b1c8e3d4f5a6b7c"
 @app.route('/', methods=['GET', 'POST', 'HEAD'])
 @app.route('/api/honeypot', methods=['GET', 'POST', 'HEAD'])
 def test_endpoint():
-    # FIX: Allow HEAD and GET requests without API key
+    # 1. Handle Pings (GET/HEAD)
     if request.method in ['GET', 'HEAD']:
         return jsonify({"status": "success", "message": "Honeypot is live"}), 200
 
-    # 1. Check the API Key ONLY for POST requests
+    # 2. Check the API Key
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    # 2. Extract JSON safely
+    # 3. Force JSON Parsing
     data = request.get_json(force=True, silent=True) or {}
     session_id = data.get("sessionId") or data.get("session_id") or "test-session"
 
-    # 3. Standard Response Format for GUVI
-    return jsonify({
+    # 4. Build Response with explicit headers
+    response_data = {
         "status": "success",
         "reply": "I am very worried. Can you help me verify my account via UPI?",
         "sessionId": session_id,
         "scamDetected": True
-    }), 200
+    }
+    
+    res = make_response(jsonify(response_data), 200)
+    res.headers["Content-Type"] = "application/json"
+    return res
 
 @app.route('/api/honeypot/final', methods=['POST'])
 def final():
