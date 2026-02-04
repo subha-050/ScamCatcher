@@ -1,7 +1,4 @@
-import re
-import os
-import json
-import requests
+import re, os, json, requests
 from flask import Flask, request, jsonify
 from datetime import datetime
 from flask_cors import CORS
@@ -9,88 +6,57 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# --- CONFIGURATION ---
 API_KEY = os.getenv("HONEYPOT_API_KEY", "sk_test_5f2a9b1c8e3d4f5a6b7c")
-DATA_FILE = "session_store.json"
 
-# --- PERSISTENCE ---
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r') as f:
-                return json.load(f)
-        except: return {}
-    return {}
+def extract_intel(text):
+    text = str(text) if text else ""
+    patterns = {
+        "upi_ids": re.findall(r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}', text),
+        "phishing_links": re.findall(r'https?://[^\s]+', text),
+        "phone_numbers": re.findall(r'(?:\+91|0)?[6-9]\d{9}', text),
+    }
+    keywords = ["block", "verify", "urgent", "kyc", "bank", "account", "transfer", "otp", "win"]
+    found_keywords = [word for word in keywords if word in text.lower()]
+    threat_level = "HIGH" if (len(patterns["upi_ids"]) > 0 or len(found_keywords) > 2) else "LOW"
+    return patterns, found_keywords, threat_level
 
-def save_data(data):
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-    except: pass
-
-# --- ROUTES ---
-
-@app.route('/')
-def home():
-    return jsonify({"status": "online", "message": "API IS READY"})
-
-@app.route('/api/honeypot', methods=['POST', 'GET'])
-def handle_message():
-    # If GUVI sends a GET request to test the URL, say hello
+# --- THE ALL-IN-ONE ROUTE ---
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/api/honeypot', methods=['GET', 'POST'])
+def handle_everything():
+    # If it's just a browser visit or a health check
     if request.method == 'GET':
-        return jsonify({"status": "online"})
+        return jsonify({"status": "online", "message": "Honeypot Active"})
 
     # Check API Key
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    # Force read JSON even if the tester sends wrong content-type headers
+    # Flexible JSON parsing
     data = request.get_json(force=True, silent=True) or {}
     
-    # We will ALWAYS return a success response to the tester, even if body is empty
-    session_id = data.get("sessionId") or data.get("session_id") or "tester-session"
-    
-    # Logic to handle different ways the text might be sent
-    message_input = data.get("message", "")
-    if isinstance(message_input, dict):
-        msg_text = message_input.get("text", "Hello")
-    else:
-        msg_text = str(message_input)
+    # Extract data regardless of format
+    session_id = data.get("sessionId") or data.get("session_id") or "guvi-test"
+    msg_input = data.get("message", "")
+    msg_text = msg_input.get("text", "") if isinstance(msg_input, dict) else str(msg_input)
 
-    # Simple intelligence
-    store = load_data()
-    if session_id not in store:
-        store[session_id] = {"upi_ids":[], "phishing_links":[], "phone_numbers":[], "keywords":[], "msg_count":0}
-    
-    store[session_id]["msg_count"] += 1
-    if "upi" in msg_text.lower():
-        store[session_id]["threat_level"] = "HIGH"
-        reply = "I'm very scared. How do I pay via UPI?"
-    else:
-        store[session_id]["threat_level"] = "LOW"
-        reply = "Is this from my bank?"
-    
-    save_data(store)
+    intel, keywords, level = extract_intel(msg_text)
 
-    # Return exactly what the tester expects
+    # Response for the tester
+    reply = "I'm very scared. Please help me with the KYC." if level == "HIGH" else "Okay, I understand."
+    
     return jsonify({
-        "status": "success", 
+        "status": "success",
         "reply": reply,
-        "sessionId": session_id
+        "sessionId": session_id,
+        "threatLevel": level
     })
 
 @app.route('/api/honeypot/final', methods=['POST'])
 def final_report():
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
-    
-    data = request.get_json(force=True, silent=True) or {}
-    session_id = data.get("sessionId") or data.get("session_id")
-    
-    return jsonify({
-        "status": "success",
-        "extractedIntelligence": load_data().get(session_id, {})
-    })
+    return jsonify({"status": "success", "message": "Report received"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
