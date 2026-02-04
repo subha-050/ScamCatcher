@@ -5,24 +5,22 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# The EXACT key you've been using in the portal
+# The EXACT key for the portal
 API_KEY = "sk_test_5f2a9b1c8e3d4f5a6b7c"
 
-@app.route('/', methods=['GET', 'POST'])
-@app.route('/api/honeypot', methods=['GET', 'POST'])
+@app.route('/', methods=['GET', 'POST', 'HEAD'])
+@app.route('/api/honeypot', methods=['GET', 'POST', 'HEAD'])
 def test_endpoint():
-    # If the tester just pings the URL to see if it's alive
-    if request.method == 'GET':
+    # FIX: Allow HEAD and GET requests without API key
+    if request.method in ['GET', 'HEAD']:
         return jsonify({"status": "success", "message": "Honeypot is live"}), 200
 
-    # 1. Check the API Key in the headers
+    # 1. Check the API Key ONLY for POST requests
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    # 2. Extract JSON (force=True fixes the "Invalid Request Body" error)
+    # 2. Extract JSON safely
     data = request.get_json(force=True, silent=True) or {}
-    
-    # Extract session ID (supporting both formats)
     session_id = data.get("sessionId") or data.get("session_id") or "test-session"
 
     # 3. Standard Response Format for GUVI
