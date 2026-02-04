@@ -57,6 +57,19 @@ def extract_intel(text):
 
 # --- ROUTES ---
 
+@app.route('/')
+def home():
+    print("Main landing page accessed successfully!")
+    return jsonify({
+        "status": "online",
+        "message": "ScamCatcher Honeypot API is live and running.",
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": {
+            "process_message": "/api/honeypot",
+            "final_report": "/api/honeypot/final"
+        }
+    })
+
 @app.route('/api/honeypot', methods=['POST'])
 def handle_message():
     if request.headers.get("x-api-key") != API_KEY:
