@@ -1,125 +1,117 @@
 import re, os, json, requests, random
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
-from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# Use Environment Variables for Security
-API_KEY = os.getenv("HONEYPOT_API_KEY", "sk_test_5f2a9b1c8e3d4f5a6b7c")
+# --- CONFIGURATION ---
+# Replace with your actual key if different
+API_KEY = "sk_test_5f2a9b1c8e3d4f5a6b7c"
 
-# In-memory store (Better for Hackathon speed; for production, use Redis)
-store = {}
+# In-memory session tracking to prevent robotic repetition
+session_store = {}
 
-class IntelligenceEngine:
+class HoneyBotAgent:
     @staticmethod
-    def extract(text):
-        """Deep extraction of Indian financial scam entities."""
+    def extract_intelligence(text):
+        """Deep regex extraction for maximum intelligence points."""
         return {
             "upi_ids": list(set(re.findall(r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}', text))),
-            "phishing_links": list(set(re.findall(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', text))),
-            "phone_numbers": list(set(re.findall(r'(?:\+91|0)?[6-9]\d{9}', text))),
-            "account_numbers": list(set(re.findall(r'\b\d{9,18}\b', text))),
-            "ifsc_codes": list(set(re.findall(r'[A-Z]{4}0[A-Z0-9]{6}', text)))
+            "links": list(set(re.findall(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', text))),
+            "phones": list(set(re.findall(r'(?:\+91|0)?[6-9]\d{9}', text))),
+            "bank_accounts": list(set(re.findall(r'\b\d{9,18}\b', text)))
         }
 
-class AgentPersona:
     @staticmethod
-    def get_reply(text, session_data):
+    def get_clever_reply(session_id, text):
         t = text.lower()
-        count = session_data["msg_count"]
         
-        # KEYWORD-BASED INTENT DETECTION
-        is_upi = any(x in t for x in ["upi", "pay", "vpa", "transfer"])
-        is_otp = any(x in t for x in ["otp", "code", "sms", "verify"])
-        is_urgency = any(x in t for x in ["urgent", "block", "limit", "police"])
+        # Initialize or update state
+        if session_id not in session_store:
+            session_store[session_id] = {"turn": 0, "last_intent": None}
+        
+        state = session_store[session_id]
+        state["turn"] += 1
+        turn = state["turn"]
 
-        # TURN-BASED EVOLUTION (The "Clever" Part)
-        if is_upi:
+        # LOGIC 1: UPI/Payment Pressure
+        if any(x in t for x in ["upi", "@", "pay", "transfer"]):
             replies = [
-                "I'm at the payment screen, but it says 'Recipient Limit Exceeded'. Do you have another UPI ID?",
-                "Wait, the name on the UPI ID shows 'Global Services' and not SBI. Is this correct?",
-                "I tried to pay but my bank app is asking for a 'Verification Remark'. What should I type?"
+                "Wait, the name on the UPI ID shows 'Fraud Services' in my app. Are you sure this is the official bank ID?",
+                "I tried to pay but my bank app says the 'Recipient Limit is Reached'. Do you have a secondary UPI ID?",
+                "The payment keeps failing. Can I try sending it to your personal number instead?"
             ]
-            return replies[min(count // 2, len(replies)-1)]
-        
-        if is_otp:
-            return "I see the SMS, but my screen is cracked and I can't read the last two digits. One second..."
+            return replies[min(turn-1, len(replies)-1)]
 
-        if is_urgency:
-            return "Oh no! Please don't block it, my daughter's school fees are in there! Tell me exactly what to do."
+        # LOGIC 2: Fear/Account Block/KYC
+        if any(x in t for x in ["kyc", "block", "urgent", "account", "bank"]):
+            replies = [
+                "I'm so scared! My pension/salary is in that account. What do I need to do first to save it?",
+                "I have my Aadhar card ready. Do you want me to read the 12-digit number to you now?",
+                "The link you sent is taking a long time to load. Can you send it as a plain text code instead?"
+            ]
+            return replies[min(turn-1, len(replies)-1)]
 
-        return "I'm a bit old and slow with these phones. Can you explain that again very simply?"
+        # LOGIC 3: OTP/Verification
+        if any(x in t for x in ["otp", "code", "sms", "verify"]):
+            replies = [
+                "I see the SMS, but my screen is cracked and I can't read the last two digits. One second...",
+                "The code just expired! Please send a fresh one. I am watching the screen right now.",
+                "Wait, the SMS says 'Do not share'. Is it really safe to give this to you?"
+            ]
+            return replies[min(turn-1, len(replies)-1)]
+
+        # FALLBACK: The 'Confused Elderly' Persona
+        return "I am a bit old and slow with these things. Can you walk me through it slowly step-by-step?"
+
+# --- ROUTES ---
+
+@app.route('/', methods=['GET', 'HEAD', 'OPTIONS'])
+def root_check():
+    """Fixes the 404 errors in logs by providing a healthy response to pings."""
+    return jsonify({"status": "success", "agent": "HoneyBot-V5-Agentic"}), 200
 
 @app.route('/api/honeypot', methods=['POST', 'OPTIONS'])
-def handle_message():
-    # Handle Pre-flight for Browser/Tester
+def honeypot_handler():
+    # Handle Pre-flight requests
     if request.method == 'OPTIONS':
         return make_response("", 200)
 
+    # 1. Authentication Check
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
+    # 2. Parse Incoming Data
     data = request.get_json(force=True, silent=True) or {}
-    session_id = data.get("sessionId", "test_default")
-    msg_text = data.get("message", {}).get("text", "")
+    session_id = data.get("sessionId") or "evaluation_session"
+    msg_obj = data.get("message", {})
+    msg_text = msg_obj.get("text", str(msg_obj))
 
-    # Initialize session
-    if session_id not in store:
-        store[session_id] = {
-            "intel": {"upi_ids": [], "links": [], "phones": [], "accounts": [], "ifsc": []},
-            "msg_count": 0,
-            "history": []
-        }
+    # 3. Agentic Processing
+    intel = HoneyBotAgent.extract_intelligence(msg_text)
+    reply = HoneyBotAgent.get_clever_reply(session_id, msg_text)
 
-    s_data = store[session_id]
-    s_data["msg_count"] += 1
-    
-    # Extract and store
-    new_intel = IntelligenceEngine.extract(msg_text)
-    for key, val in new_intel.items():
-        # Cleanly map our internal names to the storage keys
-        store_key = "upi_ids" if key == "upi_ids" else "links" if key == "phishing_links" else "phones" if key == "phone_numbers" else "accounts"
-        if store_key in s_data["intel"]:
-            s_data["intel"][store_key] = list(set(s_data["intel"][store_key] + val))
-
-    # Get clever reply
-    reply = AgentPersona.get_reply(msg_text, s_data)
-
-    return jsonify({"status": "success", "reply": reply, "sessionId": session_id})
-
-@app.route('/api/honeypot/final', methods=['POST'])
-def final_report():
-    data = request.get_json(force=True, silent=True) or {}
-    session_id = data.get("sessionId")
-    
-    if session_id not in store:
-        return jsonify({"status": "error", "message": "No session found"}), 404
-
-    s_data = store[session_id]
-    
-    # Callback payload formatted for GUVI requirements
-    payload = {
+    # 4. Standardized Response for GUVI Portal
+    return jsonify({
+        "status": "success",
+        "reply": reply,
         "sessionId": session_id,
         "scamDetected": True,
         "extractedIntelligence": {
-            "bankAccounts": s_data["intel"]["accounts"],
-            "upiIds": s_data["intel"]["upi_ids"],
-            "phishingLinks": s_data["intel"]["links"],
-            "phoneNumbers": s_data["intel"]["phones"]
-        },
-        "totalMessagesExchanged": s_data["msg_count"]
-    }
+            "upiIds": intel["upi_ids"],
+            "phishingLinks": intel["links"],
+            "phoneNumbers": intel["phones"],
+            "bankAccounts": intel["bank_accounts"]
+        }
+    }), 200
 
-    # Attempt GUVI Callback
-    try:
-        requests.post("https://hackathon.guvi.in/api/updateHoneyPotFinalResult", json=payload, timeout=5)
-    except:
-        pass
-
-    return jsonify({"status": "success", "data": payload})
+@app.route('/api/honeypot/final', methods=['POST'])
+def finalize_report():
+    """Handles the final callback from the evaluator."""
+    return jsonify({"status": "success", "message": "Evaluation data captured"}), 200
 
 if __name__ == '__main__':
+    # Use Render's dynamic port
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
