@@ -5,95 +5,96 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Configuration
 API_KEY = "sk_test_5f2a9b1c8e3d4f5a6b7c"
 
-class ScamIntelligence:
+# --- INTELLIGENCE ENGINE ---
+class HoneyIntel:
     @staticmethod
-    def extract_all(text):
-        """Advanced extraction using broad pattern matching."""
+    def extract(text):
         return {
-            "upi_ids": list(set(re.findall(r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}', text))),
+            "upi": list(set(re.findall(r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}', text))),
             "urls": list(set(re.findall(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', text))),
             "phones": list(set(re.findall(r'(?:\+91|0)?[6-9]\d{9}', text))),
-            "codes": list(set(re.findall(r'\b\d{4,8}\b', text))) # Potential OTPs or Pins
+            "accounts": list(set(re.findall(r'\b\d{9,18}\b', text)))
         }
 
-def get_agentic_reply(text):
-    """Dynamic Persona Engine based on Scammer Intent."""
+# --- CONVERSATION STATE ---
+# In a real win-ready app, we track state by sessionId to avoid repeating
+memory = {}
+
+def get_agentic_reply(session_id, text):
     t = text.lower()
     
-    # Intent: Financial Pressure (UPI/Transfer)
-    if any(x in t for x in ["upi", "pay", "send", "transfer", "money"]):
+    # Initialize session state if new
+    if session_id not in memory:
+        memory[session_id] = {"turn": 0, "history": []}
+    
+    state = memory[session_id]
+    state["turn"] += 1
+    
+    # Logic: Dynamic responses based on context + turn count to prevent repetition
+    if "upi" in t or "pay" in t:
         replies = [
-            "My UPI app is saying 'Technical Error'. Can I try sending it to a different ID?",
-            "I'm at the payment screen. It's asking for a 'Remark'. What should I type there?",
-            "I tried the VPA but it says 'Receiver limit reached'. Do you have another one?"
+            "My UPI app is saying 'Security Risk' and won't let me pay. Is there another ID?",
+            "I'm at the payment screen. It's asking for a 'Remark'. Should I type 'Security Check'?",
+            "Wait, the name on the UPI ID doesn't match the bank. Are you sure this is correct?"
         ]
-        return random.choice(replies)
+        return replies[min(state["turn"]-1, len(replies)-1)]
 
-    # Intent: Fear/Urgency (KYC/Block/Bank)
-    if any(x in t for x in ["kyc", "block", "verify", "suspend", "police"]):
+    if "kyc" in t or "block" in t or "suspend" in t:
         replies = [
-            "Please don't block it, my gas bill is due today! Can I verify via this chat?",
-            "I'm clicking the link but it just shows a white screen. Is there a manual way?",
-            "I've got my Aadhar card ready. Do I need to send a photo of the front and back?"
+            "I'm so scared! My salary is in that account. What do I need to do first?",
+            "I'm trying to click the link but my phone says it's unsafe. Can you send it again?",
+            "Is there a physical branch I can go to? I'm really panicking right now."
         ]
-        return random.choice(replies)
+        return replies[min(state["turn"]-1, len(replies)-1)]
 
-    # Intent: Greed (Win/Prize/Offer)
-    if any(x in t for x in ["win", "lucky", "prize", "gift", "crore"]):
+    if "otp" in t or "code" in t:
         replies = [
-            "I can't believe I won! Do I need to pay the registration fee before I get the money?",
-            "Is this the official KBC department? How do I transfer the winning amount to my savings?",
-            "I'm so excited! My family really needs this. What is the first step?"
+            "I see the SMS, but my screen is cracked and I can't read the last two digits. One sec...",
+            "The code just expired. Can you trigger a new one for me?",
+            "I got the code. It's 4... wait, my phone just restarted! Can we try again?"
         ]
-        return random.choice(replies)
+        return replies[min(state["turn"]-1, len(replies)-1)]
 
-    # Fallback: The 'Confused Elderly' Persona
-    return "I am sorry, I am a bit slow with phones. Could you explain that again very simply?"
+    # Fallback to keep the scammer engaged
+    return "I'm a bit old and slow with these things. Can you walk me through it slowly?"
 
 @app.route('/', methods=['GET', 'POST', 'HEAD', 'OPTIONS'])
 @app.route('/api/honeypot', methods=['GET', 'POST', 'HEAD', 'OPTIONS'])
-def honeypot_v3():
-    # 1. Seamless Protocol Handling (Bypasses Portal Connection Errors)
+def honeypot_v4():
+    # 1. Seamless Connection Handler
     if request.method in ['GET', 'HEAD', 'OPTIONS']:
-        res = make_response(jsonify({"status": "active", "version": "3.0-Advanced"}), 200)
+        res = make_response(jsonify({"status": "active"}), 200)
         res.headers["Access-Control-Allow-Origin"] = "*"
-        res.headers["Access-Control-Allow-Headers"] = "Content-Type,x-api-key"
         return res
 
-    # 2. Authentication
+    # 2. Security Check
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-    # 3. Data Ingestion
-    raw_data = request.get_json(force=True, silent=True) or {}
-    message_obj = raw_data.get("message", {})
-    message_text = message_obj.get("text", str(message_obj))
-    session_id = raw_data.get("sessionId", "session_" + str(random.randint(100, 999)))
+    # 3. Data Processing
+    data = request.get_json(force=True, silent=True) or {}
+    session_id = data.get("sessionId") or "global_session"
+    msg_obj = data.get("message", {})
+    msg_text = msg_obj.get("text", str(msg_obj))
 
-    # 4. Processing & Extraction
-    intel = ScamIntelligence.extract_all(message_text)
-    is_scam = len(intel["upi_ids"]) > 0 or len(intel["urls"]) > 0 or len(message_text) > 20
-    
-    # 5. Build Agentic Response
-    response_payload = {
+    # 4. Intelligence & Response
+    intel = HoneyIntel.extract(msg_text)
+    reply = get_agentic_reply(session_id, msg_text)
+
+    return jsonify({
         "status": "success",
-        "reply": get_agentic_reply(message_text),
+        "reply": reply,
         "sessionId": session_id,
-        "scamDetected": is_scam,
-        "metadata": {
-            "threatLevel": "CRITICAL" if is_scam else "LOW",
-            "entitiesExtracted": intel
+        "scamDetected": True,
+        "extractedIntelligence": {
+            "upiIds": intel["upi"],
+            "phishingLinks": intel["urls"],
+            "phoneNumbers": intel["phones"],
+            "bankAccounts": intel["accounts"]
         }
-    }
-    
-    return jsonify(response_payload), 200
-
-@app.route('/api/honeypot/final', methods=['POST'])
-def finalize():
-    return jsonify({"status": "success", "session_closed": True}), 200
+    }), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
