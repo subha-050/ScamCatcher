@@ -44,46 +44,74 @@ import time, random
 # Internal memory to track the "Victim's" mental state
 brain_memory = {}
 
+import random
+
+# Persistent memory for the bot's narrative state
+brain_memory = {}
+
 def get_agentic_reply(session_id, text):
-    # 1. Initialize a unique persona for this scammer
+    t = text.lower()
+    
+    # 1. Initialize session with a specific "Persona" and "Stage"
     if session_id not in brain_memory:
         brain_memory[session_id] = {
             "turn": 0,
-            "fear_level": 0.2,  # 0 to 1
-            "tech_confusion": 0.5,
-            "persona": random.choice(["Elderly", "Busy Professional", "Naive Student"])
+            "stage": "CONFUSION", # Transitions: CONFUSION -> STALLING -> PANIC -> SUSPICION
+            "persona": random.choice(["elderly", "anxious", "busy"]),
+            "extracted_data": []
         }
     
     state = brain_memory[session_id]
     state["turn"] += 1
-    t = text.lower()
+    turn = state["turn"]
 
-    # 2. Simulate "Thinking Time" (Scammers don't trust instant replies)
-    time.sleep(random.uniform(1.5, 3.5))
+    # 2. Update Narrative Stage based on turn count
+    if turn <= 2:
+        state["stage"] = "CONFUSION"
+    elif 3 <= turn <= 5:
+        state["stage"] = "STALLING"
+    elif 6 <= turn <= 8:
+        state["stage"] = "PANIC"
+    else:
+        state["stage"] = "SUSPICION"
 
-    # 3. Brain Logic: Intent-Based Emotional Shifting
-    if any(x in t for x in ["police", "block", "jail", "urgent"]):
-        state["fear_level"] += 0.2
-    if any(x in t for x in ["otp", "pin", "password"]):
-        state["tech_confusion"] += 0.1
-
-    # 4. Generate Narrative Response based on Persona & State
-    if state["fear_level"] > 0.7:
-        return "Please don't block my account! I'm shaking right now. I'll get the code, just give me a minute to find my phone charger!"
+    # 3. NARRATIVE ENGINE: Response Selection
     
-    if state["turn"] > 6:
-        return "Wait... my daughter just told me that banks never ask for OTPs over SMS. Are you really from the head office? What was your employee ID again?"
-
-    # Turn-based variety for Credential requests
-    if "otp" in t or "code" in t:
-        excuses = [
-            "I see the message but my screen is cracked, I can't tell if that's an 8 or a 0. Can you resend?",
-            "My phone just did a software update right when the text came! It's restarting now, hang on.",
-            "I think I found it... it's 6 digits, right? Oh wait, that was from my grocery delivery. One sec."
+    # STAGE 1: THE "CONFUSED TARGET" (Builds Trust)
+    if state["stage"] == "CONFUSION":
+        replies = [
+            "I'm so sorry, my eyes aren't what they used to be. Is that an 8 or a 0 in the code you sent?",
+            "Wait, I see the message! But I accidentally clicked something and it disappeared. Can you send it one more time?"
         ]
-        return excuses[min(state["turn"]-1, len(excuses)-1)]
+        return replies[(turn - 1) % len(replies)]
 
-    return "I'm trying to follow along, but this new app is so confusing. Could you explain that last part one more time, very slowly?"
+    # STAGE 2: THE "TECHNICAL FAULT" (Stalls for Time)
+    if state["stage"] == "STALLING":
+        excuses = [
+            "Oh dear, my phone just started a software update! It says 'Restarting...' please don't hang up!",
+            "I'm looking for my glasses, I can't find them anywhere. Let me check the kitchen...",
+            "The phone is at 1% battery! I'm running to find the charger, stay on the line!"
+        ]
+        # Offset by 3 since this stage starts at turn 3
+        return excuses[min(turn - 3, len(excuses) - 1)]
+
+    # STAGE 3: THE "PANICKED VICTIM" (High Engagement)
+    if state["stage"] == "PANIC":
+        panic_responses = [
+            "I found the wire but it's not charging! I'm shaking, please don't block my pension account!",
+            "It's finally turning back on! Okay, I see a 6-digit number... wait, is this for GPay or the Bank?",
+            "I'm typing it in now! But it says 'Incorrect PIN'. Are you sure this is the right code for SBI?"
+        ]
+        return panic_responses[min(turn - 6, len(panic_responses) - 1)]
+
+    # STAGE 4: THE "SKEPTICAL PUSHBACK" (Final Intel Extraction)
+    # This stage wastes the scammer's time by making them "prove" themselves
+    suspicion_responses = [
+        "Wait... my son just told me the bank never asks for OTPs. What was your employee ID again? I need to verify you.",
+        "I'm not sending anything else until you tell me which branch you are calling from. Is it the one on Main Street?",
+        "If you are really from the bank, you should know my middle name. What is it?"
+    ]
+    return suspicion_responses[min(turn - 9, len(suspicion_responses) - 1)]
 # --- ROUTES ---
 
 @app.route('/', methods=['GET', 'HEAD'])
