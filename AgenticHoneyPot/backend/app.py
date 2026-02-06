@@ -39,49 +39,51 @@ class CognitiveEngine:
         if any(x in t for x in ["block", "kyc", "urgent", "police", "sbi", "bank"]): return "URGENCY"
         return "GENERAL"
 
+import time, random
+
+# Internal memory to track the "Victim's" mental state
+brain_memory = {}
+
 def get_agentic_reply(session_id, text):
-    intent = CognitiveEngine.analyze_scammer_intent(text)
-    
-    # 1. Initialize session if new
+    # 1. Initialize a unique persona for this scammer
     if session_id not in brain_memory:
-        brain_memory[session_id] = {"turn": 0, "intent_counts": {}}
+        brain_memory[session_id] = {
+            "turn": 0,
+            "fear_level": 0.2,  # 0 to 1
+            "tech_confusion": 0.5,
+            "persona": random.choice(["Elderly", "Busy Professional", "Naive Student"])
+        }
     
     state = brain_memory[session_id]
     state["turn"] += 1
+    t = text.lower()
+
+    # 2. Simulate "Thinking Time" (Scammers don't trust instant replies)
+    time.sleep(random.uniform(1.5, 3.5))
+
+    # 3. Brain Logic: Intent-Based Emotional Shifting
+    if any(x in t for x in ["police", "block", "jail", "urgent"]):
+        state["fear_level"] += 0.2
+    if any(x in t for x in ["otp", "pin", "password"]):
+        state["tech_confusion"] += 0.1
+
+    # 4. Generate Narrative Response based on Persona & State
+    if state["fear_level"] > 0.7:
+        return "Please don't block my account! I'm shaking right now. I'll get the code, just give me a minute to find my phone charger!"
     
-    # 2. Track how many times we've hit this specific intent
-    state["intent_counts"][intent] = state["intent_counts"].get(intent, 0) + 1
-    count = state["intent_counts"][intent]
+    if state["turn"] > 6:
+        return "Wait... my daughter just told me that banks never ask for OTPs over SMS. Are you really from the head office? What was your employee ID again?"
 
-    # 3. Variety Logic for CREDENTIAL (OTP) requests
-    if intent == "CREDENTIAL":
-        responses = [
-            "The SMS arrived, but the screen is blurry and I can't read the numbers. Can you send it again?",
-            "I see the message, but my phone just died! Let me find my charger... okay, can you resend it?",
-            "I got a code but then I accidentally deleted the thread. I'm so sorry, I'm not good with these touchscreens.",
-            "Wait, I see a 6-digit number but it says 'Do not share'. Is it safe? Are you sure you are from the bank?",
-            "My grandson just walked in, I had to hide the phone. Can you send it one more time quickly?"
+    # Turn-based variety for Credential requests
+    if "otp" in t or "code" in t:
+        excuses = [
+            "I see the message but my screen is cracked, I can't tell if that's an 8 or a 0. Can you resend?",
+            "My phone just did a software update right when the text came! It's restarting now, hang on.",
+            "I think I found it... it's 6 digits, right? Oh wait, that was from my grocery delivery. One sec."
         ]
-        # Cycle through responses or stay on the last one if they keep asking
-        return responses[min(count-1, len(responses)-1)]
+        return excuses[min(state["turn"]-1, len(excuses)-1)]
 
-    # 4. Variety Logic for URGENCY
-    if intent == "URGENCY":
-        urgency_responses = [
-            "I'm so scared! My pension is in that account. Please help!",
-            "Is there a physical branch I can go to? I don't want to lose my savings!",
-            "Please don't block it! I have to pay for my medicine tomorrow."
-        ]
-        return urgency_responses[min(count-1, len(urgency_responses)-1)]
-
-    # Fallback for general variety
-    fallbacks = [
-        "I'm looking for my glasses, one second...",
-        "Can you explain that again? I'm a bit slow with technology.",
-        "Wait, the phone is making a weird noise. Are you still there?"
-    ]
-    return random.choice(fallbacks)
-
+    return "I'm trying to follow along, but this new app is so confusing. Could you explain that last part one more time, very slowly?"
 # --- ROUTES ---
 
 @app.route('/', methods=['GET', 'HEAD'])
