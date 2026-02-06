@@ -42,20 +42,45 @@ class CognitiveEngine:
 def get_agentic_reply(session_id, text):
     intent = CognitiveEngine.analyze_scammer_intent(text)
     
+    # 1. Initialize session if new
     if session_id not in brain_memory:
-        brain_memory[session_id] = {"turn": 0, "fear": 0.5, "trust": 0.9}
+        brain_memory[session_id] = {"turn": 0, "intent_counts": {}}
     
     state = brain_memory[session_id]
     state["turn"] += 1
     
-    if intent == "URGENCY":
-        return "I'm so scared! My pension is in that account. Please tell me exactly what to do!"
-    if intent == "FINANCIAL":
-        return "I have my UPI app open. It's asking for a '6-digit Security Pin'. Should I type that in now?"
+    # 2. Track how many times we've hit this specific intent
+    state["intent_counts"][intent] = state["intent_counts"].get(intent, 0) + 1
+    count = state["intent_counts"][intent]
+
+    # 3. Variety Logic for CREDENTIAL (OTP) requests
     if intent == "CREDENTIAL":
-        return "The SMS arrived, but the screen is blurry and I can't read the numbers. Can you send it again?"
-    
-    return "I'm a bit old and slow with these phones. Can you explain that again very simply?"
+        responses = [
+            "The SMS arrived, but the screen is blurry and I can't read the numbers. Can you send it again?",
+            "I see the message, but my phone just died! Let me find my charger... okay, can you resend it?",
+            "I got a code but then I accidentally deleted the thread. I'm so sorry, I'm not good with these touchscreens.",
+            "Wait, I see a 6-digit number but it says 'Do not share'. Is it safe? Are you sure you are from the bank?",
+            "My grandson just walked in, I had to hide the phone. Can you send it one more time quickly?"
+        ]
+        # Cycle through responses or stay on the last one if they keep asking
+        return responses[min(count-1, len(responses)-1)]
+
+    # 4. Variety Logic for URGENCY
+    if intent == "URGENCY":
+        urgency_responses = [
+            "I'm so scared! My pension is in that account. Please help!",
+            "Is there a physical branch I can go to? I don't want to lose my savings!",
+            "Please don't block it! I have to pay for my medicine tomorrow."
+        ]
+        return urgency_responses[min(count-1, len(urgency_responses)-1)]
+
+    # Fallback for general variety
+    fallbacks = [
+        "I'm looking for my glasses, one second...",
+        "Can you explain that again? I'm a bit slow with technology.",
+        "Wait, the phone is making a weird noise. Are you still there?"
+    ]
+    return random.choice(fallbacks)
 
 # --- ROUTES ---
 
