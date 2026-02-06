@@ -128,7 +128,7 @@ def main_handler():
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
     # 2. MANDATORY: Safe JSON Parsing
-    # The 'char 0' error often happens if get_json() fails silently
+    # The 'char 0' error often happens if get_json() fails silent
     data = request.get_json(force=True, silent=True)
     if data is None:
         return jsonify({"status": "error", "message": "Invalid JSON"}), 400
@@ -147,8 +147,7 @@ def main_handler():
     reply = get_agentic_reply(session_id, msg_text)
 
     # 4. FINAL RESPONSE (Matches the Evaluator's Requirements)
-    # We include 'status' and 'reply' at the top level as required
-    response_body = {
+        response_body = {
         "status": "success",
         "reply": reply,
         "sessionId": session_id,
@@ -166,6 +165,6 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 @app.route('/api/honeypot/final', methods=['POST'])
+
 def finalize_report():
-    """This is used by GUVI to signal the end of the test."""
     return jsonify({"status": "success", "message": "Report received"}), 200
