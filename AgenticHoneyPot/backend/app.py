@@ -16,12 +16,18 @@ brain_memory = {}
 class CognitiveEngine:
     @staticmethod
     def extract_intel(text):
-        """Regex to identify Indian scam entities."""
         text = str(text)
         return {
-            "upi": list(set(re.findall(r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}', text))),
+            # Catch: name@bank, name@okaxis, or name@ybl (2-256 chars before @)
+            "upi": list(set(re.findall(r'[a-zA-Z0-9.-]{2,256}@[a-zA-Z][a-zA-Z]{2,64}', text))),
+            
+            # Catch: http, https, and tinyurl/bitly styles
             "links": list(set(re.findall(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+', text))),
+            
+            # Catch: +91..., 0..., or 10-digit numbers starting with 6-9
             "phones": list(set(re.findall(r'(?:\+91|0)?[6-9]\d{9}', text))),
+            
+            # Catch: 9 to 18 digit bank account numbers
             "accounts": list(set(re.findall(r'\b\d{9,18}\b', text)))
         }
 
@@ -104,3 +110,7 @@ def main_handler():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
+@app.route('/api/honeypot/final', methods=['POST'])
+def finalize_report():
+    """This is used by GUVI to signal the end of the test."""
+    return jsonify({"status": "success", "message": "Report received"}), 200
